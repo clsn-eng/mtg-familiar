@@ -47,6 +47,7 @@ import android.os.Handler;
 import android.os.Parcel;
 import android.os.Parcelable;
 import android.preference.PreferenceManager;
+
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.DialogFragment;
@@ -61,6 +62,7 @@ import androidx.appcompat.app.ActionBarDrawerToggle;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.app.AppCompatDelegate;
 import androidx.appcompat.widget.Toolbar;
+
 import android.util.Log;
 import android.util.TypedValue;
 import android.view.KeyEvent;
@@ -154,7 +156,7 @@ public class FamiliarActivity extends AppCompatActivity {
     /* Constants used for saving state */
     private static final String CURRENT_FRAG = "CURRENT_FRAG";
     private static final String IS_REFRESHING = "IS_REFRESHING";
-//    /* PayPal URL */
+    //    /* PayPal URL */
 //    @SuppressWarnings("SpellCheckingInspection")
 //    public static final String PAYPAL_URL = "https://www.paypal.com/cgi-bin/webscr?cmd=_donations" +
 //            "&business=SZK4TAH2XBZNC&lc=US&item_name=MTG%20Familiar&currency_code=USD" +
@@ -201,7 +203,7 @@ public class FamiliarActivity extends AppCompatActivity {
             assert AppWidgetManager.getInstance(getApplication()) != null;
             AppWidgetManager appWidgetManager = AppWidgetManager.getInstance(getApplication());
             assert appWidgetManager != null;
-            int ids[] = appWidgetManager.getAppWidgetIds(
+            int[] ids = appWidgetManager.getAppWidgetIds(
                     new ComponentName(getApplication(), MTGFamiliarAppWidgetProvider.class));
             intent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, ids);
             sendBroadcast(intent);
@@ -478,7 +480,7 @@ public class FamiliarActivity extends AppCompatActivity {
         }
 
         /* Set the system bar color programatically, for lollipop+ */
-        if (android.os.Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             getWindow().setStatusBarColor(ContextCompat.getColor(this, getResourceIdFromAttr(R.attr.colorPrimaryDark_attr)));
         }
 
@@ -560,8 +562,12 @@ public class FamiliarActivity extends AppCompatActivity {
                             PreferenceAdapter.setLastJARUpdate(FamiliarActivity.this, 0);
                             PreferenceAdapter.setLastRulesUpdate(FamiliarActivity.this, 0);
                             PreferenceAdapter.setLegalityTimestamp(FamiliarActivity.this, 0);
-                            startService(new Intent(FamiliarActivity.this, DbUpdaterService.class));
-                        } catch (SQLiteException | FamiliarDbException e) {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                startForegroundService(new Intent(FamiliarActivity.this, DbUpdaterService.class));
+                            } else {
+                                startService(new Intent(FamiliarActivity.this, DbUpdaterService.class));
+                            }
+                        } catch (SQLiteException | FamiliarDbException | IllegalStateException e) {
                             e.printStackTrace();
                         } finally {
                             DatabaseManager.closeDatabase(FamiliarActivity.this, handle);
@@ -616,7 +622,15 @@ public class FamiliarActivity extends AppCompatActivity {
                 case R.string.main_force_update_title: {
                     if (getNetworkState(FamiliarActivity.this, true) != -1) {
                         PreferenceAdapter.setLastLegalityUpdate(FamiliarActivity.this, 0);
-                        startService(new Intent(FamiliarActivity.this, DbUpdaterService.class));
+                        try {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                startForegroundService(new Intent(FamiliarActivity.this, DbUpdaterService.class));
+                            } else {
+                                startService(new Intent(FamiliarActivity.this, DbUpdaterService.class));
+                            }
+                        } catch (IllegalStateException e) {
+                            // Ignore it
+                        }
                     }
                     shouldCloseDrawer = true;
                     break;
@@ -765,7 +779,7 @@ public class FamiliarActivity extends AppCompatActivity {
                     if (lastVersion < 54) {
                         File cacheDir = getCacheDir();
                         if (null != cacheDir && cacheDir.exists()) {
-                            File listFiles[] = cacheDir.listFiles();
+                            File[] listFiles = cacheDir.listFiles();
                             if (null != listFiles) {
                                 for (File cachedFile : listFiles) {
                                     //noinspection ResultOfMethodCallIgnored
@@ -776,7 +790,7 @@ public class FamiliarActivity extends AppCompatActivity {
 
                         cacheDir = getExternalCacheDir();
                         if (null != cacheDir && cacheDir.exists()) {
-                            File listFiles[] = cacheDir.listFiles();
+                            File[] listFiles = cacheDir.listFiles();
                             if (null != listFiles) {
                                 for (File cachedFile : listFiles) {
                                     //noinspection ResultOfMethodCallIgnored
@@ -801,7 +815,15 @@ public class FamiliarActivity extends AppCompatActivity {
             int lastLegalityUpdate = PreferenceAdapter.getLastLegalityUpdate(this);
             /* days to ms */
             if (((curTime / 1000) - lastLegalityUpdate) > (updateFrequency * 24 * 60 * 60)) {
-                startService(new Intent(this, DbUpdaterService.class));
+                try {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        startForegroundService(new Intent(this, DbUpdaterService.class));
+                    } else {
+                        startService(new Intent(this, DbUpdaterService.class));
+                    }
+                } catch (IllegalStateException e) {
+                    // Ignore it
+                }
             }
         }
 
@@ -998,8 +1020,8 @@ public class FamiliarActivity extends AppCompatActivity {
                 break;
             case Intent.ACTION_MAIN:
                 /* App launched as regular, show the default fragment if there isn't one already */
-                if (getSupportFragmentManager().getFragments() == null ||
-                        getSupportFragmentManager().getFragments().isEmpty()) {
+                getSupportFragmentManager().getFragments();
+                if (getSupportFragmentManager().getFragments().isEmpty()) {
                     launchHomeScreen();
                 }
                 break;
@@ -1467,7 +1489,7 @@ public class FamiliarActivity extends AppCompatActivity {
      * @return True if the click was acted upon, false otherwise
      */
     @Override
-    public boolean onOptionsItemSelected(MenuItem item) {
+    public boolean onOptionsItemSelected(@NotNull MenuItem item) {
         switch (item.getItemId()) {
             case android.R.id.home:
                 if (mDrawerLayout.isDrawerOpen(mDrawerList)) {
@@ -1569,7 +1591,6 @@ public class FamiliarActivity extends AppCompatActivity {
     public int getResourceIdFromAttr(int attr) {
         assert getTheme() != null;
         TypedArray ta = getTheme().obtainStyledAttributes(new int[]{attr});
-        assert ta != null;
         int resId = ta.getResourceId(0, 0);
         ta.recycle();
         return resId;
@@ -1654,7 +1675,7 @@ public class FamiliarActivity extends AppCompatActivity {
         private final Class[] mFragClasses;
         TextView textView;
 
-        DrawerEntry(int nameResource, int iconResource, boolean isHeader, Class fragments[]) {
+        DrawerEntry(int nameResource, int iconResource, boolean isHeader, Class[] fragments) {
             mNameResource = nameResource;
             mIconAttr = iconResource;
             mIsDivider = isHeader;
@@ -1811,7 +1832,7 @@ public class FamiliarActivity extends AppCompatActivity {
             parcel.writeBundle(outState);
             int size = parcel.dataSize();
             parcel.recycle();
-            FamiliarActivity.DebugLog(Log.VERBOSE, "logBundleSize", name + " saving " + Integer.toString(size) + " bytes");
+            FamiliarActivity.DebugLog(Log.VERBOSE, "logBundleSize", name + " saving " + size + " bytes");
 
             StringBuilder toPrint = new StringBuilder();
             toPrint.append("\r\n\r\n");
@@ -1848,7 +1869,7 @@ public class FamiliarActivity extends AppCompatActivity {
             parcel.writeParcelable(outState, 0);
             int size = parcel.dataSize();
             parcel.recycle();
-            FamiliarActivity.DebugLog(Log.VERBOSE, "logBundleSize", name + " saving " + Integer.toString(size) + " bytes");
+            FamiliarActivity.DebugLog(Log.VERBOSE, "logBundleSize", name + " saving " + size + " bytes");
         }
     }
 }

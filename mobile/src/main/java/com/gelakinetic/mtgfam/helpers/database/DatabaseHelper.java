@@ -22,6 +22,7 @@ package com.gelakinetic.mtgfam.helpers.database;
 import android.content.Context;
 import android.content.res.Resources;
 import android.database.sqlite.SQLiteDatabase;
+import android.database.sqlite.SQLiteException;
 import android.database.sqlite.SQLiteOpenHelper;
 
 import com.gelakinetic.mtgfam.R;
@@ -30,6 +31,7 @@ import com.gelakinetic.mtgfam.helpers.PreferenceAdapter;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.util.Objects;
 import java.util.zip.GZIPInputStream;
 
 /**
@@ -83,7 +85,7 @@ class DatabaseHelper extends SQLiteOpenHelper {
      * @return A File pointing to the database, used to inflate the internal database and check if
      * it needs updating. The database file is guaranteed to be closed
      */
-    private File getDatabaseFile() {
+    private File getDatabaseFile() throws SQLiteException {
         // Get the database file
         // https://stackoverflow.com/a/50630708/659726
         SQLiteDatabase database = this.getReadableDatabase();
@@ -107,7 +109,7 @@ class DatabaseHelper extends SQLiteOpenHelper {
             // If the database exists, delete all the files in the database folder, including
             // any write-ahead-logs (thanks Android 9)
             if (dbFile.exists()) {
-                for (File file : dbFile.getParentFile().listFiles()) {
+                for (File file : Objects.requireNonNull(dbFile.getParentFile()).listFiles()) {
                     if (!file.delete()) {
                         /* Couldn't delete the old database, so exit */
                         return;
@@ -136,7 +138,7 @@ class DatabaseHelper extends SQLiteOpenHelper {
                 fos.close();
                 gis.close();
             }
-        } catch (Resources.NotFoundException | IOException e) {
+        } catch (Resources.NotFoundException | IOException | SQLiteException e) {
             e.printStackTrace();
         }
     }
@@ -149,8 +151,13 @@ class DatabaseHelper extends SQLiteOpenHelper {
      * DATABASE_VERSION
      */
     private boolean isDbOutOfDate(Context context) {
-        File f = getDatabaseFile();
-        int dbVersion = PreferenceAdapter.getDatabaseVersion(context);
-        return (!f.exists() || f.length() < 1048576 || dbVersion < CardDbAdapter.DATABASE_VERSION);
+        try {
+            File f = getDatabaseFile();
+            int dbVersion = PreferenceAdapter.getDatabaseVersion(context);
+            return (!f.exists() || f.length() < 1048576 || dbVersion < CardDbAdapter.DATABASE_VERSION);
+        } catch (SQLiteException e) {
+            // Database is locked, assume it's up to date. Can always update later
+            return false;
+        }
     }
 }

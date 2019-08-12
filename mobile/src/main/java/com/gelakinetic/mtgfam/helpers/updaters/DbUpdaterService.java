@@ -26,6 +26,7 @@ import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteException;
 import android.os.Environment;
 import android.os.Handler;
+
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationManagerCompat;
 
@@ -53,6 +54,7 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Objects;
 import java.util.zip.GZIPInputStream;
 
 /**
@@ -62,10 +64,10 @@ public class DbUpdaterService extends IntentService {
 
     /* Status Codes */
     private static final int STATUS_NOTIFICATION = 31;
-    private static final int UPDATED_NOTIFICATION = 32;
+
+    private static final int FOREGROUND_SERVICE_ID = 295869032;
 
     /* To build and display the notification */
-    private NotificationManagerCompat mNotificationManager;
     private NotificationCompat.Builder mBuilder;
 
     /* To keep track of progress percentage when adding cards in a set */
@@ -89,7 +91,6 @@ public class DbUpdaterService extends IntentService {
         super.onCreate();
 
         mHandler = new Handler();
-        mNotificationManager = NotificationManagerCompat.from(this);
 
         Intent intent = new Intent(this, FamiliarActivity.class);
         PendingIntent mNotificationIntent = PendingIntent.getActivity(this, 0, intent, 0);
@@ -103,6 +104,8 @@ public class DbUpdaterService extends IntentService {
                 .setWhen(System.currentTimeMillis())
                 .setOngoing(true)
                 .setOnlyAlertOnce(true);
+
+        startForeground(FOREGROUND_SERVICE_ID, mBuilder.build());
     }
 
     /**
@@ -232,7 +235,7 @@ public class DbUpdaterService extends IntentService {
                             /* If the digest doesn't match, mark the set for dropping
                              * and remove it from currentSetCodes so it redownloads
                              */
-                            if (set.mDigest != null && !storedDigests.get(set.mCode).equals(set.mDigest)) {
+                            if (set.mDigest != null && !Objects.requireNonNull(storedDigests.get(set.mCode)).equals(set.mDigest)) {
                                 if (logWriter != null) {
                                     logWriter.write("Dropping expansion: " + set.mCode + '\n');
                                 }
@@ -431,14 +434,14 @@ public class DbUpdaterService extends IntentService {
      * Show the notification in the status bar
      */
     private void showStatusNotification() {
-        mNotificationManager.notify(STATUS_NOTIFICATION, mBuilder.build());
+        startForeground(FOREGROUND_SERVICE_ID, mBuilder.build());
     }
 
     /**
      * Hide the notification in the status bar
      */
     private void cancelStatusNotification() {
-        mNotificationManager.cancel(STATUS_NOTIFICATION);
+        stopForeground(true);
     }
 
     /**
@@ -450,7 +453,7 @@ public class DbUpdaterService extends IntentService {
                 .setContentText(getString(R.string.update_notification))
                 .setProgress(0, 0, false);
 
-        mNotificationManager.notify(STATUS_NOTIFICATION, mBuilder.build());
+        startForeground(FOREGROUND_SERVICE_ID, mBuilder.build());
     }
 
     /**
@@ -461,12 +464,12 @@ public class DbUpdaterService extends IntentService {
     private void switchToUpdating(String title) {
 
         mBuilder.setContentTitle(title);
-        mNotificationManager.notify(STATUS_NOTIFICATION, mBuilder.build());
+        startForeground(FOREGROUND_SERVICE_ID, mBuilder.build());
 
         /* Periodically update the progress bar */
         mProgressUpdater = () -> {
             mBuilder.setProgress(100, mProgress, false);
-            mNotificationManager.notify(STATUS_NOTIFICATION, mBuilder.build());
+            startForeground(FOREGROUND_SERVICE_ID, mBuilder.build());
             if (mProgress != 100) {
                 mHandler.postDelayed(mProgressUpdater, 200);
             }
@@ -500,7 +503,7 @@ public class DbUpdaterService extends IntentService {
                 .setAutoCancel(true)
                 .setOngoing(false);
 
-        mNotificationManager.notify(UPDATED_NOTIFICATION, mBuilder.build());
+        NotificationManagerCompat.from(this).notify(STATUS_NOTIFICATION, mBuilder.build());
     }
 
     /**
